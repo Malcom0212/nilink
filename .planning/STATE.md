@@ -1,14 +1,15 @@
 # Nilink - Project State
 
 **Last updated:** 2026-02-03
-**Status:** Phases 0-4 completes — 40/40 tests passing
+**Status:** Phase 5 in progress — Railway deployment configuration (plan 05-01 complete)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-02)
 
 **Core value:** Detecter les manipulations visuelles en temps reel sans ML lourd
-**Current focus:** Phases 0-4 completes, prochaine etape a definir
+**Current focus:** Phase 5 — Deploiement Cloud Railway
+**Next Phase:** Phase 5 (deploiement-cloud-railway)
 
 ## What's Done
 
@@ -55,11 +56,18 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 
 ## What's Next
 
-A definir — pistes possibles :
-- Phase 5 : Frontend / dashboard
-- Phase 5 : Deploiement cloud (fly.io, Railway, etc.)
-- Phase 5 : Benchmark & optimisation performance
-- Phase 5 : Extension navigateur
+### Phase 5: Deploiement Cloud Railway (In Progress)
+- [x] **Plan 05-01:** Configuration Railway deployment (Dockerfile CMD shell-form + railway.toml)
+- [ ] **Plan 05-02:** Deploiement Railway CLI/dashboard + CI/CD GitHub
+- [ ] HTTPS + domaine custom
+- [ ] Health monitoring + alertes
+- [ ] Documentation API deployee
+
+## Accumulated Context
+
+### Roadmap Evolution
+- Phase 5 added: Deploiement Cloud Railway — Deployer l'API Nilink sur Railway avec CI/CD, HTTPS, monitoring
+- Plateforme choisie: Railway (simplicite, pas de cold starts, $5/mois hobby)
 
 ## Architecture actuelle
 
@@ -70,7 +78,8 @@ nilink/
 ├── config.py           # Configuration centralisee (pydantic-settings)
 ├── logging_config.py   # Logging JSON + middleware request_id
 ├── requirements.txt    # Dependencies Python
-├── Dockerfile          # Container Docker
+├── Dockerfile          # Container Docker (shell-form CMD pour Railway)
+├── railway.toml        # Configuration Railway-as-Code
 ├── .dockerignore       # Exclusions Docker
 ├── .env.example        # Template variables d'environnement
 ├── .gitignore          # Exclusions Git
@@ -123,6 +132,8 @@ docker build -t nilink .
 | pydantic-settings | Config type-safe avec .env support natif |
 | slowapi | Rate limiting simple, integre a FastAPI |
 | JSON logging | Parsable par outils monitoring (ELK, Datadog, etc.) |
+| Shell-form CMD Docker | Permet expansion de $PORT pour Railway |
+| railway.toml | Infrastructure-as-Code pour Railway (healthcheck, restart) |
 
 ---
 *Pour reprendre: lance `/gsd:progress` ou lis ce fichier*
