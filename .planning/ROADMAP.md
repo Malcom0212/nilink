@@ -18,13 +18,15 @@
 **Status:** Done
 
 ### Phase 5: Deploiement Cloud Railway
+**Status:** Done
+**Completed:** 2026-02-03
 
 **Goal:** Deployer l'API Nilink sur Railway avec CI/CD, HTTPS, monitoring
 **Depends on:** Phase 4
-**Plans:** 2 plans
+**Plans:** 2/2 complete
 
 Plans:
-- [ ] 05-01-PLAN.md — Preparer le codebase pour Railway (Dockerfile CMD shell form + railway.toml)
-- [ ] 05-02-PLAN.md — Deployer sur Railway et verifier (creation projet, CI/CD, tests endpoints)
+- [x] 05-01-PLAN.md — Preparer le codebase pour Railway (Dockerfile CMD shell form + railway.toml)
+- [x] 05-02-PLAN.md — Deployer sur Railway et verifier (creation projet, CI/CD, tests endpoints)
 
 ---

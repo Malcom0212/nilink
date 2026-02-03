@@ -1,15 +1,15 @@
 # Nilink - Project State
 
 **Last updated:** 2026-02-03
-**Status:** Phase 5 in progress — Railway deployment configuration (plan 05-01 complete)
+**Status:** Milestone v1.0 complete — API deployee sur Railway
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-02)
 
 **Core value:** Detecter les manipulations visuelles en temps reel sans ML lourd
-**Current focus:** Phase 5 — Deploiement Cloud Railway
-**Next Phase:** Phase 5 (deploiement-cloud-railway)
+**Current focus:** Milestone v1.0 complete
+**Production URL:** https://nilink-production.up.railway.app
 
 ## What's Done
 
@@ -43,8 +43,6 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 - [x] Tests API REST + WebSocket (14 tests API)
 - [x] Fix seuils de detection (ELA/upscaling pour images uniformes)
 - [x] Compatibilite Python 3.14 (asyncio)
-- [ ] Benchmark images vraies vs fakes (a completer)
-- [ ] Tests de performance (FPS, latence)
 
 ### Phase 4: Production Hardening ✓
 - [x] Configuration centralisee (`config.py` + `pydantic-settings` + `.env.example`)
@@ -54,20 +52,13 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 - [x] Documentation API enrichie (tags, exemples, schemas erreurs, rate limits)
 - [x] `.gitignore` ajoute
 
-## What's Next
-
-### Phase 5: Deploiement Cloud Railway (In Progress)
-- [x] **Plan 05-01:** Configuration Railway deployment (Dockerfile CMD shell-form + railway.toml)
-- [ ] **Plan 05-02:** Deploiement Railway CLI/dashboard + CI/CD GitHub
-- [ ] HTTPS + domaine custom
-- [ ] Health monitoring + alertes
-- [ ] Documentation API deployee
-
-## Accumulated Context
-
-### Roadmap Evolution
-- Phase 5 added: Deploiement Cloud Railway — Deployer l'API Nilink sur Railway avec CI/CD, HTTPS, monitoring
-- Plateforme choisie: Railway (simplicite, pas de cold starts, $5/mois hobby)
+### Phase 5: Deploiement Cloud Railway ✓
+- [x] Dockerfile CMD shell-form pour expansion $PORT Railway
+- [x] railway.toml (builder DOCKERFILE, healthcheck /health, restart ON_FAILURE)
+- [x] Deploiement Railway avec HTTPS automatique
+- [x] CI/CD GitHub push-to-deploy
+- [x] Health monitoring actif
+- [x] Documentation Swagger deployee sur /docs
 
 ## Architecture actuelle
 
@@ -104,22 +95,8 @@ nilink/
 | Logging | stdlib logging + JSON formatter |
 | Container | Docker (python:3.12-slim) |
 | Tests | pytest + httpx (40 tests) |
-
-## Quick Resume Commands
-
-```bash
-# Tester
-pytest tests/ -v
-
-# Lancer l'API
-uvicorn api:app --host 0.0.0.0 --port 8000
-
-# Build Docker
-docker build -t nilink .
-
-# Continuer le developpement
-/gsd:progress
-```
+| Hosting | Railway (Hobby plan) |
+| CI/CD | GitHub push-to-deploy |
 
 ## Key Decisions Made
 
@@ -134,6 +111,7 @@ docker build -t nilink .
 | JSON logging | Parsable par outils monitoring (ELK, Datadog, etc.) |
 | Shell-form CMD Docker | Permet expansion de $PORT pour Railway |
 | railway.toml | Infrastructure-as-Code pour Railway (healthcheck, restart) |
+| Railway Hobby plan | $5/mois, pas de cold starts, simplicite |
 
 ---
 *Pour reprendre: lance `/gsd:progress` ou lis ce fichier*
