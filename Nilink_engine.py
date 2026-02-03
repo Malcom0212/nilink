@@ -215,7 +215,7 @@ class NilinkVerifier:
             )
 
         # Process frame asynchronously
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, self.verify_image, frame)
 
         # Update rPPG buffer with timestamp for temporal analysis
@@ -310,12 +310,16 @@ class NilinkVerifier:
 
             # Calculate trust score based on error uniformity
             # High std relative to mean indicates potential manipulation
-            if mean_error > 0:
+            if mean_error < 1.0:
+                # Nearly zero error means image has no compression artifacts at all
+                # This is suspicious: real photos always have some JPEG noise
+                trust_score = 0.3
+            elif mean_error > 0:
                 coefficient_of_variation = std_error / mean_error
                 # CV > 1.5 is suspicious, < 0.5 is likely authentic
                 trust_score = max(0.0, min(1.0, 1.0 - (coefficient_of_variation - 0.5) / 1.5))
             else:
-                trust_score = 1.0
+                trust_score = 0.3
 
             # Create colored heatmap
             heatmap = cv2.applyColorMap(ela_image, cv2.COLORMAP_JET)
@@ -666,8 +670,14 @@ class NilinkVerifier:
             anomalies: list[str] = []
             regions: list[dict] = []
 
+            # Image with virtually no noise is suspicious (AI-generated or uniform)
+            if global_mean_std < 1.0:
+                anomalies.append("Upscale: Image is suspiciously smooth (no sensor noise)")
+                trust_score = 0.2
+                return trust_score, anomalies, regions
+
             # AI upscaling often produces very uniform noise
-            if global_std < global_mean_std * 0.3 and global_mean_std > 1:
+            if global_std < global_mean_std * 0.3:
                 anomalies.append("Upscale: Unnaturally uniform noise pattern")
 
             # Detect blocks with significantly different noise (processing boundaries)
@@ -693,8 +703,12 @@ class NilinkVerifier:
                 anomalies.append("Upscale: Inconsistent noise levels detected")
 
             # Calculate trust score
-            uniformity_score = min(1.0, global_std / (global_mean_std * 0.5)) if global_mean_std > 0 else 1.0
-            region_penalty = min(0.5, len(regions) * 0.05)
+            # Natural sensor noise: moderate mean_std with some variation (global_std)
+            # AI upscaling: low mean_std OR very uniform noise (low global_std relative to mean)
+            noise_level_score = min(1.0, global_mean_std / 3.0)  # Penalize very low noise
+            variation_score = min(1.0, global_std / (global_mean_std * 0.3)) if global_mean_std > 0 else 0.0
+            uniformity_score = noise_level_score * 0.6 + variation_score * 0.4
+            region_penalty = min(0.3, len(regions) * 0.03)
 
             trust_score = max(0.0, uniformity_score - region_penalty)
 

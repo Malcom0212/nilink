@@ -5,6 +5,7 @@ REST + WebSocket API for the Nilink forensic verification engine.
 
 Endpoints:
 - POST /verify       — Analyze a single image (upload or URL)
+- POST /verify/base64 — Analyze a base64-encoded image
 - POST /verify/batch — Analyze multiple images
 - GET  /health       — Health check
 - WS   /ws/stream    — Real-time video stream analysis
@@ -15,41 +16,73 @@ Run:
 
 import asyncio
 import base64
+import logging
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
+from config import settings
+from logging_config import setup_logging, RequestLoggingMiddleware
 from Nilink_engine import NilinkVerifier, VerificationResult
 
 
+# --- Logging ---
+
+logger = setup_logging()
+
+
+# --- Rate Limiting ---
+
+limiter = Limiter(key_func=get_remote_address)
+
+
+def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": f"Rate limit exceeded: {exc.detail}. Please retry later."},
+    )
+
+
 # --- Models ---
+
+class ErrorResponse(BaseModel):
+    """Standard error response."""
+    detail: str = Field(..., description="Error description")
+
 
 class VerifyResponse(BaseModel):
     """Response schema for image verification."""
     global_trust_score: float = Field(
         ..., ge=0.0, le=1.0,
         description="Trust score: 0.0 (fake) to 1.0 (authentic)",
+        json_schema_extra={"example": 0.8234},
     )
     anomalies_found: list[str] = Field(
         default_factory=list,
         description="List of detected anomalies",
+        json_schema_extra={"example": ["ELA: Inconsistent compression levels detected"]},
     )
     suspicious_regions: list[dict] = Field(
         default_factory=list,
         description="Bounding boxes of suspicious areas [{x, y, w, h, reason}]",
+        json_schema_extra={"example": [{"x": 120, "y": 80, "w": 200, "h": 150, "reason": "Inconsistent error level"}]},
     )
     processing_time_ms: float = Field(
         ..., description="Processing time in milliseconds",
+        json_schema_extra={"example": 42.56},
     )
     heatmap_base64: Optional[str] = Field(
-        None, description="Manipulation heatmap as base64-encoded PNG",
+        None, description="Manipulation heatmap as base64-encoded PNG (only when include_heatmap=true)",
     )
 
 
@@ -65,15 +98,15 @@ class VerifyBase64Request(BaseModel):
 
 class BatchResponse(BaseModel):
     """Response for batch verification."""
-    results: list[VerifyResponse]
-    total_processing_time_ms: float
+    results: list[VerifyResponse] = Field(description="Verification results for each image")
+    total_processing_time_ms: float = Field(description="Total wall-clock processing time in milliseconds")
 
 
 class HealthResponse(BaseModel):
     """Health check response."""
-    status: str
+    status: str = Field(description="Engine status: 'ok' or 'not_ready'")
     engine_version: str = "0.1.0"
-    detectors: dict
+    detectors: dict = Field(description="Enabled state of each detector")
 
 
 # --- App ---
@@ -87,20 +120,57 @@ async def lifespan(app: FastAPI):
     """Initialize engine on startup."""
     global verifier
     verifier = NilinkVerifier()
+    logger.info("Nilink engine initialized")
     yield
     verifier = None
+    logger.info("Nilink engine shut down")
 
+
+DESCRIPTION = """\
+Forensic analysis API for detecting image and video manipulations in real-time.
+
+## Capabilities
+
+* **ELA** — Error Level Analysis for inpainting / AI-generation detection
+* **FFT** — Spectral analysis for GAN / diffusion model artifacts
+* **rPPG** — Remote photoplethysmography for deepfake / liveness detection
+* **Upscale** — Noise pattern analysis for AI upscaling detection
+
+## Rate Limits
+
+| Endpoint | Limit |
+|---|---|
+| `POST /verify` | {rate_limit} |
+| `POST /verify/base64` | {rate_limit} |
+| `POST /verify/batch` | {rate_limit_batch} |
+| `GET /health` | No limit |
+| `WS /ws/stream` | No limit (frame dropping handles load) |
+
+Exceeding the limit returns **429 Too Many Requests**.
+""".format(rate_limit=settings.RATE_LIMIT, rate_limit_batch=settings.RATE_LIMIT_BATCH)
 
 app = FastAPI(
     title="Nilink Verifier API",
-    description="Forensic analysis API for detecting image/video manipulations in real-time.",
+    description=DESCRIPTION,
     version="0.1.0",
     lifespan=lifespan,
+    openapi_tags=[
+        {"name": "verification", "description": "Image and video forensic verification endpoints"},
+        {"name": "monitoring", "description": "Health and status endpoints"},
+    ],
+    responses={
+        429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
+        503: {"model": ErrorResponse, "description": "Engine not initialized"},
+    },
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS.split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -153,9 +223,15 @@ def _decode_base64_image(b64_string: str) -> np.ndarray:
 
 # --- REST Endpoints ---
 
-@app.get("/health", response_model=HealthResponse)
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["monitoring"],
+    summary="Health check",
+    responses={200: {"description": "Engine status and enabled detectors"}},
+)
 async def health():
-    """Health check — confirms the engine is ready."""
+    """Health check — confirms the engine is ready and lists enabled detectors."""
     return HealthResponse(
         status="ok" if verifier else "not_ready",
         detectors={
@@ -167,8 +243,19 @@ async def health():
     )
 
 
-@app.post("/verify", response_model=VerifyResponse)
+@app.post(
+    "/verify",
+    response_model=VerifyResponse,
+    tags=["verification"],
+    summary="Analyze a single image (file upload)",
+    responses={
+        200: {"description": "Forensic analysis result with trust score and anomalies"},
+        400: {"model": ErrorResponse, "description": "Invalid image file"},
+    },
+)
+@limiter.limit(settings.RATE_LIMIT)
 async def verify_image(
+    request: Request,
     file: UploadFile = File(..., description="Image file to analyze (JPEG, PNG)"),
     include_heatmap: bool = Query(False, description="Include heatmap in response"),
 ):
@@ -177,7 +264,9 @@ async def verify_image(
 
     Upload an image file (JPEG, PNG) and receive a forensic analysis
     with trust score, detected anomalies, and suspicious regions.
-    """
+
+    **Rate limit:** {rate_limit}
+    """.format(rate_limit=settings.RATE_LIMIT)
     if verifier is None:
         raise HTTPException(status_code=503, detail="Engine not initialized.")
 
@@ -186,43 +275,88 @@ async def verify_image(
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, verifier.verify_image, image)
 
+    logger.info(
+        "verify trust_score=%.4f anomalies=%d",
+        result.global_trust_score,
+        len(result.anomalies_found),
+        extra={"trust_score": round(result.global_trust_score, 4)},
+    )
+
     return _result_to_response(result, include_heatmap)
 
 
-@app.post("/verify/base64", response_model=VerifyResponse)
-async def verify_image_base64(request: VerifyBase64Request):
+@app.post(
+    "/verify/base64",
+    response_model=VerifyResponse,
+    tags=["verification"],
+    summary="Analyze a base64-encoded image",
+    responses={
+        200: {"description": "Forensic analysis result"},
+        400: {"model": ErrorResponse, "description": "Invalid base64 or image data"},
+    },
+)
+@limiter.limit(settings.RATE_LIMIT)
+async def verify_image_base64(
+    request: Request,
+    body: VerifyBase64Request,
+):
     """
     Analyze a base64-encoded image for manipulations.
 
     Send a base64-encoded image and receive forensic analysis.
     Useful for browser integrations and API-to-API calls.
-    """
+
+    **Rate limit:** {rate_limit}
+    """.format(rate_limit=settings.RATE_LIMIT)
     if verifier is None:
         raise HTTPException(status_code=503, detail="Engine not initialized.")
 
-    image = _decode_base64_image(request.image_base64)
+    image = _decode_base64_image(body.image_base64)
 
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, verifier.verify_image, image)
 
-    return _result_to_response(result, request.include_heatmap)
+    logger.info(
+        "verify/base64 trust_score=%.4f anomalies=%d",
+        result.global_trust_score,
+        len(result.anomalies_found),
+        extra={"trust_score": round(result.global_trust_score, 4)},
+    )
+
+    return _result_to_response(result, body.include_heatmap)
 
 
-@app.post("/verify/batch", response_model=BatchResponse)
+@app.post(
+    "/verify/batch",
+    response_model=BatchResponse,
+    tags=["verification"],
+    summary="Analyze multiple images in one request",
+    responses={
+        200: {"description": "Array of forensic analysis results"},
+        400: {"model": ErrorResponse, "description": "Invalid image or batch size exceeded"},
+    },
+)
+@limiter.limit(settings.RATE_LIMIT_BATCH)
 async def verify_batch(
+    request: Request,
     files: list[UploadFile] = File(..., description="Multiple image files to analyze"),
     include_heatmap: bool = Query(False, description="Include heatmaps in responses"),
 ):
     """
     Analyze multiple images in a single request.
 
-    Upload up to 10 images. Each is analyzed independently.
-    """
+    Upload up to {max_batch} images. Each is analyzed independently.
+
+    **Rate limit:** {rate_limit_batch}
+    """.format(max_batch=settings.MAX_BATCH_SIZE, rate_limit_batch=settings.RATE_LIMIT_BATCH)
     if verifier is None:
         raise HTTPException(status_code=503, detail="Engine not initialized.")
 
-    if len(files) > 10:
-        raise HTTPException(status_code=400, detail="Maximum 10 images per batch request.")
+    if len(files) > settings.MAX_BATCH_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {settings.MAX_BATCH_SIZE} images per batch request.",
+        )
 
     start = time.perf_counter()
 
@@ -349,7 +483,7 @@ if __name__ == "__main__":
     import uvicorn
     print("=" * 50)
     print("  NILINK VERIFIER API")
-    print("  http://localhost:8000")
-    print("  Docs: http://localhost:8000/docs")
+    print(f"  http://localhost:{settings.PORT}")
+    print(f"  Docs: http://localhost:{settings.PORT}/docs")
     print("=" * 50)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=settings.HOST, port=settings.PORT)

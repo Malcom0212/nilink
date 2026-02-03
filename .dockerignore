@@ -1,0 +1,8 @@
+__pycache__
+.pytest_cache
+.planning
+.claude
+.git
+tests
+*.pyc
+.env

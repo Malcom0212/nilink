@@ -1,14 +1,14 @@
 # Nilink - Project State
 
-**Last updated:** 2026-02-02
-**Status:** Core engine implemented, ready for next phase
+**Last updated:** 2026-02-03
+**Status:** Engine + API + Production Hardening done — Tests passing (40/40)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-02-02)
 
 **Core value:** Detecter les manipulations visuelles en temps reel sans ML lourd
-**Current focus:** API layer (REST + WebSocket)
+**Current focus:** Phase 4 complete, prochaine etape a definir
 
 ## What's Done
 
@@ -29,25 +29,30 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 - [x] Output: score 0-1, anomalies, heatmap, regions
 - [x] Demo modes: synthetic, image, webcam
 
-## What's Next
+### Phase 2: API Layer ✓
+- [x] FastAPI REST endpoint pour images (`POST /verify`, `/verify/base64`, `/verify/batch`)
+- [x] WebSocket endpoint pour flux video (`/ws/stream`)
+- [x] Serialisation JSON des resultats
+- [x] Gestion erreurs et validation input
+- [x] Health check endpoint (`GET /health`)
+- [x] CORS middleware
 
-### Phase 2: API Layer (a faire)
-- [ ] FastAPI REST endpoint pour images
-- [ ] WebSocket endpoint pour flux video
-- [ ] Serialisation JSON des resultats
-- [ ] Gestion erreurs et validation input
-
-### Phase 3: Testing & Validation (a faire)
-- [ ] Tests unitaires pour chaque detecteur
-- [ ] Benchmark images vraies vs fakes
-- [ ] Tuning seuils de detection
+### Phase 3: Testing & Validation ✓
+- [x] Tests unitaires pour chaque detecteur (40/40 passent)
+- [x] Tests API REST + WebSocket
+- [x] Fix seuils de detection (ELA/upscaling pour images uniformes)
+- [x] Compatibilite Python 3.14 (asyncio)
+- [ ] Benchmark images vraies vs fakes (a completer)
 - [ ] Tests de performance (FPS, latence)
 
-### Phase 4: Production Hardening (a faire)
-- [ ] Docker containerization
-- [ ] Rate limiting
-- [ ] Logging et monitoring
-- [ ] Documentation API
+## What's Next
+
+### Phase 4: Production Hardening ✓
+- [x] Configuration centralisee (`config.py` + `pydantic-settings` + `.env.example`)
+- [x] Logging structure JSON (`logging_config.py` + middleware request_id)
+- [x] Rate limiting par IP (`slowapi` — 60/min verify, 10/min batch)
+- [x] Docker containerization (`Dockerfile` + `.dockerignore`)
+- [x] Documentation API enrichie (tags, exemples, schemas erreurs, rate limits)
 
 ## Quick Resume Commands
 
