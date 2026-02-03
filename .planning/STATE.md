@@ -1,64 +1,29 @@
 # Nilink - Project State
 
 **Last updated:** 2026-02-03
-**Status:** Milestone v1.0 complete — API deployee sur Railway
+**Status:** v1.0 Foundation shipped — planning next milestone
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-02)
+See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Detecter les manipulations visuelles en temps reel sans ML lourd
-**Current focus:** Milestone v1.0 complete
+**Current focus:** Planning next milestone
 **Production URL:** https://nilink-production.up.railway.app
 
-## What's Done
+## Current Position
 
-### Phase 0: Project Setup ✓
-- [x] PROJECT.md created with full context
-- [x] config.json with workflow preferences (YOLO, standard depth, parallel)
-- [x] Git repo initialized
+Phase: Next milestone not started
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-02-03 — v1.0 milestone complete
 
-### Phase 1: Core Engine ✓
-- [x] `Nilink_engine.py` implemented (~980 lines)
-- [x] 4 detecteurs forensiques:
-  - ELA (Error Level Analysis) — inpainting/generation
-  - FFT (analyse spectrale) — artefacts GAN/diffusion
-  - rPPG (photoplethysmographie) — deepfake/liveness
-  - Noise consistency — upscaling IA
-- [x] Async stream processing avec frame dropping
-- [x] Detection visage OpenCV Haar
-- [x] Output: score 0-1, anomalies, heatmap, regions
-- [x] Demo modes: synthetic, image, webcam
+## Shipped Milestones
 
-### Phase 2: API Layer ✓
-- [x] FastAPI REST endpoints (`POST /verify`, `/verify/base64`, `/verify/batch`)
-- [x] WebSocket endpoint pour flux video (`/ws/stream`)
-- [x] Serialisation JSON des resultats
-- [x] Gestion erreurs et validation input
-- [x] Health check endpoint (`GET /health`)
-- [x] CORS middleware
-
-### Phase 3: Testing & Validation ✓
-- [x] Tests unitaires pour chaque detecteur (26 tests engine)
-- [x] Tests API REST + WebSocket (14 tests API)
-- [x] Fix seuils de detection (ELA/upscaling pour images uniformes)
-- [x] Compatibilite Python 3.14 (asyncio)
-
-### Phase 4: Production Hardening ✓
-- [x] Configuration centralisee (`config.py` + `pydantic-settings` + `.env.example`)
-- [x] Logging structure JSON (`logging_config.py` + middleware request_id)
-- [x] Rate limiting par IP (`slowapi` — 60/min verify, 10/min batch)
-- [x] Docker containerization (`Dockerfile` + `.dockerignore`)
-- [x] Documentation API enrichie (tags, exemples, schemas erreurs, rate limits)
-- [x] `.gitignore` ajoute
-
-### Phase 5: Deploiement Cloud Railway ✓
-- [x] Dockerfile CMD shell-form pour expansion $PORT Railway
-- [x] railway.toml (builder DOCKERFILE, healthcheck /health, restart ON_FAILURE)
-- [x] Deploiement Railway avec HTTPS automatique
-- [x] CI/CD GitHub push-to-deploy
-- [x] Health monitoring actif
-- [x] Documentation Swagger deployee sur /docs
+### v1.0 Foundation (2026-02-03)
+- 6 phases (0-5), 27 fichiers, 4,953 lignes
+- Moteur forensique 4 detecteurs + API REST/WebSocket + deploiement Railway
+- See: .planning/MILESTONES.md
 
 ## Architecture actuelle
 
@@ -80,7 +45,8 @@ nilink/
 │   └── test_api.py     # 14 tests API
 └── .planning/
     ├── STATE.md        # Ce fichier
-    └── PROJECT.md      # Vision et specs projet
+    ├── PROJECT.md      # Vision et specs projet
+    └── MILESTONES.md   # Historique milestones
 ```
 
 ## Stack technique
@@ -98,20 +64,10 @@ nilink/
 | Hosting | Railway (Hobby plan) |
 | CI/CD | GitHub push-to-deploy |
 
-## Key Decisions Made
+## Open Items
 
-| Decision | Rationale |
-|----------|-----------|
-| Pas de ML lourd (PyTorch/TF) | Performance temps reel 15+ FPS prioritaire |
-| 4 detecteurs hybrides | Couvrir differents types de manipulation |
-| OpenCV Haar pour visages | Dependance legere, suffisant pour ROI |
-| Frame dropping actif | Maintenir latence constante |
-| pydantic-settings | Config type-safe avec .env support natif |
-| slowapi | Rate limiting simple, integre a FastAPI |
-| JSON logging | Parsable par outils monitoring (ELK, Datadog, etc.) |
-| Shell-form CMD Docker | Permet expansion de $PORT pour Railway |
-| railway.toml | Infrastructure-as-Code pour Railway (healthcheck, restart) |
-| Railway Hobby plan | $5/mois, pas de cold starts, simplicite |
+- Performance production ~1.9s/frame (Railway Hobby CPU shared)
+- CORS_ORIGINS permissif (a configurer pour production)
 
 ---
-*Pour reprendre: lance `/gsd:progress` ou lis ce fichier*
+*Pour reprendre: lance `/gsd:new-milestone` pour planifier le prochain milestone*
